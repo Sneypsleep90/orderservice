@@ -1,14 +1,40 @@
-```markdown
 # Wildberries Order Service
 
-Микросервис для обработки заказов в стиле Wildberries с использованием **Go**, **PostgreSQL**, **Kafka** и **in-memory кэширования**.
+Микросервис для приёма и обработки заказов в стиле Wildberries, реализованный на **Go**, с хранением в **PostgreSQL**, асинхронной обработкой через **Kafka** и высокопроизводительным **in-memory** кэшем.
 
 ---
 
-## 📦 Архитектура проекта
+## 🚀 Быстрый старт
 
+1. Запустите инфраструктуру:
+
+```bash
+docker-compose up -d
+docker-compose ps
 ```
 
+2. Подготовьте базу данных (пример для PostgreSQL):
+
+```sql
+CREATE USER myapp_user WITH PASSWORD 'myapp_password';
+CREATE DATABASE myapp_db OWNER myapp_user;
+GRANT ALL PRIVILEGES ON DATABASE myapp_db TO myapp_user;
+```
+
+3. Установите зависимости и запустите приложение:
+
+```bash
+go mod tidy
+go run cmd/main.go
+```
+
+Откройте веб-интерфейс: `http://localhost:8081`
+
+---
+
+## 📁 Структура проекта
+
+```
 myapp/
 ├─ cmd/
 │  └─ main.go                 # Точка входа приложения
@@ -26,34 +52,38 @@ myapp/
 ├─ .env
 ├─ docker-compose.yaml
 └─ README.md
-
-````
-
----
-
-## ⚙️ Основные сущности
-
-### Order
-- `order_uid` — уникальный идентификатор
-- `track_number` — номер отслеживания
-- `customer_id` — идентификатор клиента
-- `date_created` — дата создания
-
-### Delivery
-- Контактные данные: `name`, `phone`, `email`
-- Адрес: `city`, `region`, `address`
-
-### Payment
-- `transaction`, `amount`, `currency`, `provider`
-
-### Item
-- `chrt_id`, `name`, `brand`, `price`, `total_price`
+```
 
 ---
 
-## 🧩 Интерфейсы
+## 🧩 Основные сущности
+
+**Order**
+
+* `order_uid` — уникальный идентификатор
+* `track_number` — номер отслеживания
+* `customer_id` — идентификатор клиента
+* `date_created` — дата создания
+
+**Delivery**
+
+* Контактные данные: `name`, `phone`, `email`
+* Адрес: `city`, `region`, `address`
+
+**Payment**
+
+* `transaction`, `amount`, `currency`, `provider`
+
+**Item**
+
+* `chrt_id`, `name`, `brand`, `price`, `total_price`
+
+---
+
+## 🧰 Интерфейсы (public contracts)
 
 ### Repository
+
 ```go
 type Repository interface {
     CreateOrder(order *model.Order) error
@@ -62,7 +92,7 @@ type Repository interface {
     UpdateOrder(order *model.Order) error
     DeleteOrder(orderUID string) error
 }
-````
+```
 
 ### Cache
 
@@ -93,44 +123,18 @@ type Service interface {
 
 ---
 
-## 🚀 Запуск проекта
-
-### 1. Инфраструктура (Docker Compose)
-
-```bash
-docker-compose up -d
-docker-compose ps
-```
-
-### 2. Настройка базы данных
-
-```sql
-CREATE USER myapp_user WITH PASSWORD 'myapp_password';
-CREATE DATABASE myapp_db OWNER myapp_user;
-GRANT ALL PRIVILEGES ON DATABASE myapp_db TO myapp_user;
-```
-
-### 3. Запуск приложения
-
-```bash
-go mod tidy
-go run cmd/main.go
-```
-
----
-
-## 🌐 API Endpoints
+## 🌐 HTTP API
 
 ### Основные
 
 * `GET /order/{order_uid}` — получить заказ по UID
-* `GET /api/v1/orders` — получить все заказы
+* `GET /api/v1/orders` — получить все заказы (поддерживает пагинацию)
 * `PUT /api/v1/orders/{order_uid}` — обновить заказ
 * `DELETE /api/v1/orders/{order_uid}` — удалить заказ
 
 ### Служебные
 
-* `GET /health` — проверка здоровья
+* `GET /health` — проверка здоровья сервиса
 * `GET /api/v1/cache/stats` — статистика кэша
 * `POST /api/v1/cache/warmup` — прогрев кэша
 
@@ -142,29 +146,25 @@ curl http://localhost:8081/order/b563feb7b2b84b6test
 
 ---
 
-## 🖥 Веб-интерфейс
-
-Открыть: [http://localhost:8081](http://localhost:8081)
-
----
-
 ## 📨 Kafka
 
-### Создание топика
+**Создание топика** (в контейнере Kafka):
 
 ```bash
 docker exec -it myapp_kafka kafka-topics --create --topic orders --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
 ```
 
-### Отправка тестового сообщения
+**Отправка тестового сообщения**:
 
 ```bash
 echo '{ "order_uid": "b563feb7b2b84b6test", ... }' | docker exec -i myapp_kafka kafka-console-producer --topic orders --bootstrap-server localhost:9092
 ```
 
+В приложении реализован consumer, который асинхронно обрабатывает входящие сообщения и сохраняет заказы в БД с записью в кэш.
+
 ---
 
-## ⚙️ Конфигурация (.env)
+## ⚙️ Конфигурация (`.env`)
 
 ```env
 DB_HOST=localhost
@@ -183,19 +183,21 @@ SERVER_PORT=8081
 
 ---
 
-## 📝 Особенности реализации
+## 🔧 Особенности реализации
 
-* Thread-safe in-memory кэш с прогревом
-* Валидация данных и graceful shutdown
-* Транзакции для целостности данных
-* Connection pooling, индексы, пагинация
-* Асинхронная обработка Kafka сообщений
+* Thread-safe in-memory кэш с возможностью прогрева (Warmup)
+* Валидация входящих данных
+* Graceful shutdown с ожиданием завершения обработки Kafka сообщений
+* Транзакции для целостности при работе с БД
+* Connection pooling и индексация для ускорения выборок
+* Пагинация при получении списков заказов
+* Асинхронная обработка сообщений Kafka
 
 ---
 
-## 📊 Мониторинг
+## 📊 Мониторинг и отладка
 
-* Kafka UI: [http://localhost:8080](http://localhost:8080)
+* Kafka UI: `http://localhost:8080`
 * Статистика кэша: `curl http://localhost:8081/api/v1/cache/stats`
 * Health check: `curl http://localhost:8081/health`
 
@@ -227,21 +229,35 @@ golangci-lint run
 
 ## ⚠️ Troubleshooting
 
-### Kafka
+**Kafka**
 
-* Проверить статус: `docker-compose ps`
-* Логи: `docker-compose logs kafka`
-* Список топиков: `docker exec -it myapp_kafka kafka-topics --list --bootstrap-server localhost:9092`
+* Проверить статус контейнеров: `docker-compose ps`
+* Просмотреть логи: `docker-compose logs kafka`
+* Список топиков:
+  `docker exec -it myapp_kafka kafka-topics --list --bootstrap-server localhost:9092`
 
-### База данных
+**Postgres**
 
-* Подключение: `docker exec -it myapp_postgres psql -U myapp_user -d myapp_db`
-* Проверка миграций: `\dt`
+* Подключиться в контейнере: `docker exec -it myapp_postgres psql -U myapp_user -d myapp_db`
+* Проверить таблицы: `\dt`
 
-### Кэш
+**Кэш**
 
 * Статистика: `curl http://localhost:8081/api/v1/cache/stats`
-* Прогрев кэша: `curl -X POST http://localhost:8081/api/v1/cache/warmup`
+* Прогрев: `curl -X POST http://localhost:8081/api/v1/cache/warmup`
 
+---
 
-# orderservice
+## ✅ Рекомендации по улучшению
+
+* Добавить metrics (Prometheus) и дашборд (Grafana)
+* CI/CD для автоматического прогона миграций и тестов
+* Добавить схемы валидации сообщений Kafka (JSON Schema / Protobuf)
+* Rate limiting и RBAC для HTTP API
+
+---
+
+## 📝 Лицензия
+
+MIT — свободное использование, модификация и распространение.
+
