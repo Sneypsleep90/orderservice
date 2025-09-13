@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wildberries - Поиск заказа</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f8f8;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #cb11ab 0%, #481173 100%);
+            color: white;
+            padding: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+
+        .logo::before {
+            content: "🛍️";
+            margin-right: 10px;
+            font-size: 32px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 30px;
+        }
+
+        .nav a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            transition: opacity 0.3s;
+        }
+
+        .nav a:hover {
+            opacity: 0.8;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .search-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            margin-bottom: 30px;
+        }
+
+        .search-title {
+            font-size: 32px;
+            color: #481173;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .search-subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 16px;
+        }
+
+        .search-form {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #cb11ab;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(203, 17, 171, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #cb11ab 0%, #481173 100%);
+            color: white;
+            border: none;
+            padding: 16px 40px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(203, 17, 171, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #cb11ab;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 20px 0;
+            border-left: 4px solid #c33;
+            display: none;
+        }
+
+        .order-details {
+            display: none;
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            margin-top: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .order-title {
+            font-size: 28px;
+            color: #481173;
+            font-weight: bold;
+        }
+
+        .order-status {
+            background: #e8f5e8;
+            color: #2d5a2d;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .detail-section {
+            margin-bottom: 30px;
+            background: #fafafa;
+            padding: 25px;
+            border-radius: 12px;
+            border-left: 4px solid #cb11ab;
+        }
+
+        .detail-section h3 {
+            color: #481173;
+            margin-bottom: 20px;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .detail-section h3::before {
+            content: "📋";
+            margin-right: 10px;
+        }
+
+        .delivery-section h3::before {
+            content: "🚚";
+        }
+
+        .payment-section h3::before {
+            content: "💳";
+        }
+
+        .items-section h3::before {
+            content: "📦";
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .detail-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e1e5e9;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: #666;
+            font-size: 12px;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .detail-value {
+            color: #333;
+            font-size: 16px;
+            word-break: break-word;
+        }
+
+        .items-list {
+            display: grid;
+            gap: 20px;
+        }
+
+        .item-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e1e5e9;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .item-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .item-brand {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .item-price {
+            font-size: 20px;
+            font-weight: bold;
+            color: #cb11ab;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-top: 4px solid #cb11ab;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #cb11ab;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .footer {
+            background: #333;
+            color: white;
+            text-align: center;
+            padding: 30px 0;
+            margin-top: 60px;
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            .nav {
+                gap: 20px;
+            }
+
+            .container {
+                margin: 20px auto;
+                padding: 0 15px;
+            }
+
+            .search-card, .order-details {
+                padding: 25px;
+            }
+
+            .detail-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .order-header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">Wildberries</div>
+            <nav class="nav">
+                <a href="#search">Поиск заказа</a>
+                <a href="#stats">Статистика</a>
+                <a href="#help">Помощь</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="search-card">
+            <h1 class="search-title">Поиск заказа</h1>
+            <p class="search-subtitle">Введите номер заказа для получения подробной информации</p>
+
+            <form class="search-form" id="searchForm">
+                <div class="form-group">
+                    <label for="orderUid" class="form-label">Номер заказа</label>
+                    <input type="text" id="orderUid" name="orderUid" class="form-input" 
+                           placeholder="Например: b563feb7b2b84b6test" required>
+                </div>
+                <button type="submit" class="btn" id="searchBtn">Найти заказ</button>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Поиск заказа...</p>
+            </div>
+
+            <div class="error" id="error"></div>
+        </div>
+
+        <div class="order-details" id="orderDetails">
+            <div class="order-header">
+                <h2 class="order-title">Детали заказа</h2>
+                <div class="order-status">Обработан</div>
+            </div>
+            <div id="orderContent"></div>
+        </div>
+
+        <div class="stats" id="stats" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-number" id="cacheSize">0</div>
+                <div class="stat-label">Заказов в кэше</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="hitRate">0%</div>
+                <div class="stat-label">Эффективность кэша</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalHits">0</div>
+                <div class="stat-label">Всего запросов</div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2024 Wildberries. Все права защищены.</p>
+    </footer>
+
+    <script>
+        const API_BASE = 'http://localhost:8081';
+        
+        document.getElementById('searchForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const orderUid = document.getElementById('orderUid').value.trim();
+            if (!orderUid) {
+                showError('Пожалуйста, введите номер заказа');
+                return;
+            }
+            
+            await searchOrder(orderUid);
+        });
+
+        async function searchOrder(orderUid) {
+            showLoading(true);
+            hideError();
+            hideOrderDetails();
+            
+            try {
+                const response = await fetch(`${API_BASE}/order/${orderUid}`);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Заказ не найден');
+                    }
+                    throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+                }
+                
+                const order = await response.json();
+                displayOrder(order);
+                await updateStats();
+                
+            } catch (error) {
+                showError(`Ошибка: ${error.message}`);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayOrder(order) {
+            const orderContent = document.getElementById('orderContent');
+            
+            orderContent.innerHTML = `
+                <div class="detail-section">
+                    <h3>Информация о заказе</h3>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <div class="detail-label">Номер заказа</div>
+                            <div class="detail-value">${order.order_uid}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Трек-номер</div>
+                            <div class="detail-value">${order.track_number}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Клиент</div>
+                            <div class="detail-value">${order.customer_id}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Служба доставки</div>
+                            <div class="detail-value">${order.delivery_service}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Дата создания</div>
+                            <div class="detail-value">${new Date(order.date_created).toLocaleString('ru-RU')}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section delivery-section">
+                    <h3>Информация о доставке</h3>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <div class="detail-label">Получатель</div>
+                            <div class="detail-value">${order.delivery.name}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Телефон</div>
+                            <div class="detail-value">${order.delivery.phone}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Email</div>
+                            <div class="detail-value">${order.delivery.email}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Город</div>
+                            <div class="detail-value">${order.delivery.city}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Регион</div>
+                            <div class="detail-value">${order.delivery.region}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Индекс</div>
+                            <div class="detail-value">${order.delivery.zip}</div>
+                        </div>
+                        <div class="detail-item" style="grid-column: 1 / -1;">
+                            <div class="detail-label">Адрес</div>
+                            <div class="detail-value">${order.delivery.address}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section payment-section">
+                    <h3>Информация об оплате</h3>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <div class="detail-label">Транзакция</div>
+                            <div class="detail-value">${order.payment.transaction}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Провайдер</div>
+                            <div class="detail-value">${order.payment.provider}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Валюта</div>
+                            <div class="detail-value">${order.payment.currency}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Сумма</div>
+                            <div class="detail-value">${order.payment.amount} ${order.payment.currency}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Банк</div>
+                            <div class="detail-value">${order.payment.bank}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Стоимость доставки</div>
+                            <div class="detail-value">${order.payment.delivery_cost} ${order.payment.currency}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Стоимость товаров</div>
+                            <div class="detail-value">${order.payment.goods_total} ${order.payment.currency}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Дата оплаты</div>
+                            <div class="detail-value">${new Date(order.payment.payment_dt * 1000).toLocaleString('ru-RU')}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section items-section">
+                    <h3>Товары (${order.items.length})</h3>
+                    <div class="items-list">
+                        ${order.items.map((item, index) => `
+                            <div class="item-card">
+                                <div class="item-header">
+                                    <div>
+                                        <div class="item-name">${item.name}</div>
+                                        <div class="item-brand">${item.brand}</div>
+                                    </div>
+                                    <div class="item-price">${item.total_price} ${order.payment.currency}</div>
+                                </div>
+                                <div class="detail-grid">
+                                    <div class="detail-item">
+                                        <div class="detail-label">Цена</div>
+                                        <div class="detail-value">${item.price} ${order.payment.currency}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Скидка</div>
+                                        <div class="detail-value">${item.sale}%</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Размер</div>
+                                        <div class="detail-value">${item.size}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Статус</div>
+                                        <div class="detail-value">${item.status}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Трек-номер</div>
+                                        <div class="detail-value">${item.track_number}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            showOrderDetails();
+        }
+
+        async function updateStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/v1/cache/stats`);
+                if (response.ok) {
+                    const stats = await response.json();
+                    document.getElementById('cacheSize').textContent = stats.size || 0;
+                    document.getElementById('hitRate').textContent = `${Math.round((stats.hit_rate || 0) * 100)}%`;
+                    document.getElementById('totalHits').textContent = stats.total_hits || 0;
+                    document.getElementById('stats').style.display = 'grid';
+                }
+            } catch (error) {
+                console.error('Failed to fetch stats:', error);
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('searchBtn').disabled = show;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('error').style.display = 'none';
+        }
+
+        function showOrderDetails() {
+            document.getElementById('orderDetails').style.display = 'block';
+        }
+
+        function hideOrderDetails() {
+            document.getElementById('orderDetails').style.display = 'none';
+        }
+
+        // Загружаем статистику при загрузке страницы
+        document.addEventListener('DOMContentLoaded', updateStats);
+    </script>
+</body>
+</html>
