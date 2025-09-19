@@ -39,7 +39,16 @@ func main() {
 	}
 
 	repo := repository.NewPostgresRepository(db)
-	orderCache := cache.NewInMemoryCache()
+	var orderCache cache.Cache
+	if cfg.CacheType == "lru" {
+		lruCache, err := cache.NewLRUCache(cfg.CacheLRUSize)
+		if err != nil {
+			log.Fatalf("Failed to create LRU cache: %v", err)
+		}
+		orderCache = lruCache
+	} else {
+		orderCache = cache.NewInMemoryCache()
+	}
 	statsCache := cache.NewStatsCache(orderCache)
 	orderService := service.NewOrderService(repo, statsCache)
 
