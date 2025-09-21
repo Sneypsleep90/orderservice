@@ -8,7 +8,7 @@
 ![Docker](https://img.shields.io/badge/Docker-compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-Микросервис для обработки заказов в стиле Wildberries с использованием **Go**, **PostgreSQL**, **Kafka** и **in-memory кэширования**.
+Микросервис для обработки заказов с использованием **Go**, **PostgreSQL**, **Kafka** и **in-memory кэширования**.
 
 ---
 
