@@ -19,6 +19,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func main() {
@@ -27,6 +29,13 @@ func main() {
 	}
 
 	cfg := config.Load()
+
+	shutdownTracing := service.InitTracing("order-service")
+	defer func() {
+		if err := shutdownTracing(context.Background()); err != nil {
+			log.Printf("tracing shutdown error: %v", err)
+		}
+	}()
 
 	db, err := database.Connect(cfg)
 	if err != nil {
@@ -70,6 +79,14 @@ func main() {
 	}
 	defer consumer.Stop()
 
+	dlqProducer, err := kafka.NewProducer(cfg.KafkaBrokers[0], cfg.KafkaDLQTopic)
+	if err != nil {
+		log.Printf("Warning: failed to create DLQ producer: %v", err)
+	} else {
+		consumer.SetDLQProducer(dlqProducer)
+		defer dlqProducer.Close()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -85,11 +102,15 @@ func main() {
 	handler := handlers.NewHandler(orderService)
 	handler.RegisterRoutes(router)
 
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./web/")))
+	router.Handle("/metrics", promhttp.Handler())
+
+	router.PathPrefix("/").Handler(otelhttp.NewHandler(http.FileServer(http.Dir("./web/")), "static"))
+
+	router.Handle("/metrics", promhttp.Handler())
 
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(cfg.ServerPort),
-		Handler: router,
+		Handler: otelhttp.NewHandler(router, "http_server"),
 	}
 
 	go func() {

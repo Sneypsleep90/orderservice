@@ -7,6 +7,9 @@ import (
 	"myapp/internal/model"
 	"myapp/internal/repository"
 	"time"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Service interface {
@@ -35,6 +38,7 @@ func (s *OrderService) ProcessOrder(order *model.Order) error {
 	log.Printf("Creating order: %s", order.OrderUID)
 
 	if err := s.validateOrder(order); err != nil {
+		ordersProcessErrorsTotal.Inc()
 		return fmt.Errorf("order validation failed: %w", err)
 	}
 
@@ -42,8 +46,12 @@ func (s *OrderService) ProcessOrder(order *model.Order) error {
 		order.DateCreated = time.Now()
 	}
 
+	timer := prometheus.NewTimer(orderProcessDurationSeconds)
+	defer timer.ObserveDuration()
+
 	log.Printf("Saving order %s to database", order.OrderUID)
 	if err := s.repo.CreateOrder(order); err != nil {
+		ordersProcessErrorsTotal.Inc()
 		return fmt.Errorf("failed to save order to database: %w", err)
 	}
 
@@ -51,6 +59,7 @@ func (s *OrderService) ProcessOrder(order *model.Order) error {
 	s.cache.Set(order.OrderUID, order)
 
 	log.Printf("Order %s processed successfully", order.OrderUID)
+	ordersProcessedTotal.Inc()
 	return nil
 }
 
@@ -137,46 +146,9 @@ func (s *OrderService) WarmupCache() error {
 }
 
 func (s *OrderService) validateOrder(order *model.Order) error {
-	if order.OrderUID == "" {
-		return fmt.Errorf("order_uid is required")
+	validatorInstance := validator.New(validator.WithRequiredStructEnabled())
+	if err := validatorInstance.Struct(order); err != nil {
+		return err
 	}
-
-	if order.TrackNumber == "" {
-		return fmt.Errorf("track_number is required")
-	}
-
-	if order.CustomerID == "" {
-		return fmt.Errorf("customer_id is required")
-	}
-
-	if order.Delivery.Name == "" {
-		return fmt.Errorf("delivery name is required")
-	}
-
-	if order.Delivery.Phone == "" {
-		return fmt.Errorf("delivery phone is required")
-	}
-
-	if order.Payment.Transaction == "" {
-		return fmt.Errorf("payment transaction is required")
-	}
-
-	if order.Payment.Amount <= 0 {
-		return fmt.Errorf("payment amount must be positive")
-	}
-
-	if len(order.Items) == 0 {
-		return fmt.Errorf("order must have at least one item")
-	}
-
-	for i, item := range order.Items {
-		if item.Name == "" {
-			return fmt.Errorf("item %d name is required", i)
-		}
-		if item.Price <= 0 {
-			return fmt.Errorf("item %d price must be positive", i)
-		}
-	}
-
 	return nil
 }

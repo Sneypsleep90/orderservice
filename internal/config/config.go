@@ -17,6 +17,9 @@ type Config struct {
 	KafkaGroupID   string
 	ServerPort     int
 	MigrationsPath string
+	CacheType      string
+	CacheLRUSize   int
+	KafkaDLQTopic  string
 }
 
 func Load() Config {
@@ -46,12 +49,24 @@ func Load() Config {
 		KafkaGroupID:   getEnv("KAFKA_GROUP_ID", "order-service"),
 		ServerPort:     serverPort,
 		MigrationsPath: getEnv("MIGRATIONS_PATH", "./migrations"),
+		CacheType:      getEnv("CACHE_TYPE", "memory"),
+		CacheLRUSize:   getIntEnv("CACHE_LRU_SIZE", 1000),
+		KafkaDLQTopic:  getEnv("KAFKA_DLQ_TOPIC", "orders-dlq"),
 	}
 }
 
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getIntEnv(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if v, err := strconv.Atoi(value); err == nil {
+			return v
+		}
 	}
 	return defaultValue
 }

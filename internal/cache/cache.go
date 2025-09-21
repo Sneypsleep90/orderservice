@@ -4,6 +4,8 @@ import (
 	"myapp/internal/model"
 	"sync"
 	"time"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 type Cache interface {
@@ -66,6 +68,48 @@ func (c *InMemoryCache) Size() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.items)
+}
+
+type LRUCache struct {
+	cache *lru.Cache[string, *model.Order]
+}
+
+func NewLRUCache(capacity int) (Cache, error) {
+	c, err := lru.New[string, *model.Order](capacity)
+	if err != nil {
+		return nil, err
+	}
+	return &LRUCache{cache: c}, nil
+}
+
+func (c *LRUCache) Set(orderUID string, order *model.Order) {
+	c.cache.Add(orderUID, order)
+}
+
+func (c *LRUCache) Get(orderUID string) (*model.Order, bool) {
+	return c.cache.Get(orderUID)
+}
+
+func (c *LRUCache) Delete(orderUID string) {
+	c.cache.Remove(orderUID)
+}
+
+func (c *LRUCache) GetAll() map[string]*model.Order {
+	result := make(map[string]*model.Order)
+	for _, key := range c.cache.Keys() {
+		if val, ok := c.cache.Peek(key); ok {
+			result[key] = val
+		}
+	}
+	return result
+}
+
+func (c *LRUCache) Clear() {
+	c.cache.Purge()
+}
+
+func (c *LRUCache) Size() int {
+	return c.cache.Len()
 }
 
 type CacheStats struct {

@@ -1,11 +1,16 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"myapp/internal/model"
+	"time"
 
 	_ "github.com/lib/pq"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type Repository interface {
@@ -25,8 +30,13 @@ func NewPostgresRepository(db *sql.DB) Repository {
 }
 
 func (r *PostgresRepository) CreateOrder(order *model.Order) error {
+	tracer := otel.Tracer("repo")
+	_, span := tracer.Start(context.TODO(), "CreateOrder")
+	defer span.End()
+	start := time.Now()
 	tx, err := r.db.Begin()
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
@@ -53,30 +63,52 @@ func (r *PostgresRepository) CreateOrder(order *model.Order) error {
 		order.InternalSignature, order.CustomerID, order.DeliveryService,
 		order.ShardKey, order.SMID, order.DateCreated, order.OOFShard)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("failed to insert order: %w", err)
 	}
 
 	deliveryQuery := `
-		INSERT INTO delivery (order_uid, name, phone, zip, city, address, region, email)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+        INSERT INTO delivery (order_uid, name, phone, zip, city, address, region, email)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (order_uid) DO UPDATE SET
+            name = EXCLUDED.name,
+            phone = EXCLUDED.phone,
+            zip = EXCLUDED.zip,
+            city = EXCLUDED.city,
+            address = EXCLUDED.address,
+            region = EXCLUDED.region,
+            email = EXCLUDED.email`
 
 	_, err = tx.Exec(deliveryQuery,
 		order.OrderUID, order.Delivery.Name, order.Delivery.Phone, order.Delivery.Zip,
 		order.Delivery.City, order.Delivery.Address, order.Delivery.Region, order.Delivery.Email)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("failed to insert delivery: %w", err)
 	}
 
 	paymentQuery := `
-		INSERT INTO payment (order_uid, transaction, request_id, currency, provider, 
-		                    amount, payment_dt, bank, delivery_cost, goods_total, custom_fee)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
+        INSERT INTO payment (order_uid, transaction, request_id, currency, provider, 
+                            amount, payment_dt, bank, delivery_cost, goods_total, custom_fee)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ON CONFLICT (order_uid) DO UPDATE SET
+            transaction = EXCLUDED.transaction,
+            request_id = EXCLUDED.request_id,
+            currency = EXCLUDED.currency,
+            provider = EXCLUDED.provider,
+            amount = EXCLUDED.amount,
+            payment_dt = EXCLUDED.payment_dt,
+            bank = EXCLUDED.bank,
+            delivery_cost = EXCLUDED.delivery_cost,
+            goods_total = EXCLUDED.goods_total,
+            custom_fee = EXCLUDED.custom_fee`
 
 	_, err = tx.Exec(paymentQuery,
 		order.OrderUID, order.Payment.Transaction, order.Payment.RequestID, order.Payment.Currency,
 		order.Payment.Provider, order.Payment.Amount, order.Payment.PaymentDT, order.Payment.Bank,
 		order.Payment.DeliveryCost, order.Payment.GoodsTotal, order.Payment.CustomFee)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("failed to insert payment: %w", err)
 	}
 
@@ -95,14 +127,23 @@ func (r *PostgresRepository) CreateOrder(order *model.Order) error {
 			order.OrderUID, item.ChrtID, item.TrackNumber, item.Price, item.RID,
 			item.Name, item.Sale, item.Size, item.TotalPrice, item.NMID, item.Brand, item.Status)
 		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
 			return fmt.Errorf("failed to insert item: %w", err)
 		}
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	span.SetAttributes(attribute.Int64("duration_ms", time.Since(start).Milliseconds()))
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+	}
+	return err
 }
 
 func (r *PostgresRepository) GetOrderByUID(orderUID string) (*model.Order, error) {
+	tracer := otel.Tracer("repo")
+	_, span := tracer.Start(context.TODO(), "GetOrderByUID")
+	defer span.End()
 	order := &model.Order{}
 
 	orderQuery := `

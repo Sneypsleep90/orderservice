@@ -1,4 +1,3 @@
-
 CREATE TABLE IF NOT EXISTS orders (
     order_uid VARCHAR(255) PRIMARY KEY,
     track_number VARCHAR(255),
@@ -63,11 +62,11 @@ CREATE TABLE IF NOT EXISTS items (
     status INTEGER,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-
-
 CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_date_created ON orders(date_created);
 CREATE INDEX IF NOT EXISTS idx_delivery_order_uid ON delivery(order_uid);
 CREATE INDEX IF NOT EXISTS idx_payment_order_uid ON payment(order_uid);
+ALTER TABLE delivery ADD CONSTRAINT uq_delivery_order_uid UNIQUE (order_uid);
+ALTER TABLE payment ADD CONSTRAINT uq_payment_order_uid UNIQUE (order_uid);
 CREATE INDEX IF NOT EXISTS idx_items_order_uid ON items(order_uid);
 CREATE INDEX IF NOT EXISTS idx_items_chrt_id ON items(chrt_id);

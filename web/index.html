@@ -380,6 +380,46 @@
                 text-align: center;
             }
         }
+        .orders-list {
+            margin-top: 40px;
+        }
+        .orders-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .orders-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .orders-table th, .orders-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            text-align: left;
+            font-size: 14px;
+        }
+        .orders-table th {
+            background: #fafafa;
+            color: #555;
+            text-transform: uppercase;
+            letter-spacing: .3px;
+            font-weight: 600;
+        }
+        .orders-pagination {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 12px;
+        }
+        .muted {
+            color: #777;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -405,7 +445,10 @@
                     <input type="text" id="orderUid" name="orderUid" class="form-input" 
                            placeholder="Например: b563feb7b2b84b6test" required>
                 </div>
-                <button type="submit" class="btn" id="searchBtn">Найти заказ</button>
+                <div style="display:flex; gap:10px;">
+                    <button type="submit" class="btn" id="searchBtn">Найти заказ</button>
+                    <button type="button" class="btn" id="repeatBtn" style="background:#666;">Повторить последний</button>
+                </div>
             </form>
 
             <div class="loading" id="loading">
@@ -438,6 +481,29 @@
                 <div class="stat-label">Всего запросов</div>
             </div>
         </div>
+
+        <div class="orders-list" id="ordersRoot">
+            <div class="orders-header">
+                <h3 style="margin:0;">Последние заказы</h3>
+                <div class="muted" id="ordersMeta"></div>
+            </div>
+            <table class="orders-table" id="ordersTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>UID</th>
+                        <th>Трек</th>
+                        <th>Клиент</th>
+                        <th>Создан</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="ordersBody"></tbody>
+            </table>
+            <div class="orders-pagination" id="ordersPager" style="display:none;">
+                <button class="btn" id="prevPageBtn" disabled>Назад</button>
+                <button class="btn" id="nextPageBtn" disabled>Вперёд</button>
+            </div>
+        </div>
     </div>
 
     <footer class="footer">
@@ -445,7 +511,7 @@
     </footer>
 
     <script>
-        const API_BASE = 'http://localhost:8081';
+        const API_BASE = window.location.origin;
         
         document.getElementById('searchForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -457,6 +523,17 @@
             }
             
             await searchOrder(orderUid);
+        });
+
+        // Повтор последнего поиска
+        document.getElementById('repeatBtn').addEventListener('click', async function() {
+            const last = localStorage.getItem('lastOrderUid');
+            if (!last) {
+                showError('Нет последнего запроса');
+                return;
+            }
+            document.getElementById('orderUid').value = last;
+            await searchOrder(last);
         });
 
         async function searchOrder(orderUid) {
@@ -475,6 +552,7 @@
                 }
                 
                 const order = await response.json();
+                localStorage.setItem('lastOrderUid', orderUid);
                 displayOrder(order);
                 await updateStats();
                 
@@ -645,6 +723,70 @@
             }
         }
 
+        // Список заказов (пагинация на клиенте поверх полного списка)
+        let currentOffset = 0;
+        const pageSize = 10;
+
+        async function loadOrders(offset = 0) {
+            try {
+                const resp = await fetch(`${API_BASE}/api/v1/orders`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const orders = data.orders || [];
+                const total = (data.pagination && data.pagination.total) || orders.length;
+
+                currentOffset = Math.max(0, Math.min(offset, Math.max(0, total - pageSize)));
+
+                const paginated = orders.slice(currentOffset, currentOffset + pageSize);
+                renderOrders(paginated, { total, offset: currentOffset, limit: pageSize });
+            } catch (e) {
+                console.error('Failed to load orders', e);
+            }
+        }
+
+        function renderOrders(orders, meta) {
+            const table = document.getElementById('ordersTable');
+            const body = document.getElementById('ordersBody');
+            const pager = document.getElementById('ordersPager');
+            const info = document.getElementById('ordersMeta');
+
+            body.innerHTML = '';
+            orders.forEach(o => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${o.order_uid}</td>
+                    <td>${o.track_number}</td>
+                    <td>${o.customer_id}</td>
+                    <td>${o.date_created ? new Date(o.date_created).toLocaleString('ru-RU') : ''}</td>
+                    <td><button class="btn" data-uid="${o.order_uid}">Открыть</button></td>
+                `;
+                body.appendChild(tr);
+            });
+
+            // Кнопки
+            const prevBtn = document.getElementById('prevPageBtn');
+            const nextBtn = document.getElementById('nextPageBtn');
+            prevBtn.disabled = meta.offset <= 0;
+            nextBtn.disabled = meta.offset + meta.limit >= meta.total;
+            prevBtn.onclick = () => loadOrders(meta.offset - pageSize);
+            nextBtn.onclick = () => loadOrders(meta.offset + pageSize);
+
+            info.textContent = meta.total ? `Показано ${meta.offset + 1}-${Math.min(meta.offset + meta.limit, meta.total)} из ${meta.total}` : 'Нет данных';
+
+            table.style.display = orders.length ? '' : 'none';
+            pager.style.display = meta.total > pageSize ? 'flex' : 'none';
+
+            // Обработчик "Открыть"
+            body.querySelectorAll('button[data-uid]').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const uid = e.currentTarget.getAttribute('data-uid');
+                    document.getElementById('orderUid').value = uid;
+                    await searchOrder(uid);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+            });
+        }
+
         function showLoading(show) {
             document.getElementById('loading').style.display = show ? 'block' : 'none';
             document.getElementById('searchBtn').disabled = show;
@@ -668,8 +810,13 @@
             document.getElementById('orderDetails').style.display = 'none';
         }
 
-        // Загружаем статистику при загрузке страницы
-        document.addEventListener('DOMContentLoaded', updateStats);
+        // При загрузке страницы — статы, заказы, последний UID
+        document.addEventListener('DOMContentLoaded', () => {
+            const last = localStorage.getItem('lastOrderUid');
+            if (last) document.getElementById('orderUid').value = last;
+            updateStats();
+            loadOrders(0);
+        });
     </script>
 </body>
 </html>

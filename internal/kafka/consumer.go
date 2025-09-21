@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"myapp/internal/model"
@@ -10,12 +11,16 @@ import (
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type Consumer struct {
-	consumer *kafka.Consumer
-	service  service.Service
-	topic    string
+	consumer   *kafka.Consumer
+	service    service.Service
+	topic      string
+	dlq        *Producer
+	maxRetries int
 }
 
 func NewConsumer(brokers, groupID, topic string, service service.Service) (*Consumer, error) {
@@ -32,9 +37,10 @@ func NewConsumer(brokers, groupID, topic string, service service.Service) (*Cons
 	}
 
 	return &Consumer{
-		consumer: consumer,
-		service:  service,
-		topic:    topic,
+		consumer:   consumer,
+		service:    service,
+		topic:      topic,
+		maxRetries: 3,
 	}, nil
 }
 
@@ -55,7 +61,8 @@ func (c *Consumer) Start(ctx context.Context) error {
 			default:
 				msg, err := c.consumer.ReadMessage(100 * time.Millisecond)
 				if err != nil {
-					if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+					var ke kafka.Error
+					if errors.As(err, &ke) && ke.Code() == kafka.ErrTimedOut {
 						continue
 					}
 					log.Printf("Consumer error: %v", err)
@@ -63,7 +70,7 @@ func (c *Consumer) Start(ctx context.Context) error {
 				}
 
 				log.Printf("Received message from Kafka: %s", string(msg.Value))
-				if err := c.processMessage(msg); err != nil {
+				if err := c.processWithRetry(msg); err != nil {
 					log.Printf("Error processing message: %v", err)
 				}
 			}
@@ -77,7 +84,14 @@ func (c *Consumer) Stop() error {
 	return c.consumer.Close()
 }
 
+func (c *Consumer) SetDLQProducer(p *Producer) {
+	c.dlq = p
+}
+
 func (c *Consumer) processMessage(msg *kafka.Message) error {
+	tracer := otel.Tracer("kafka")
+	ctx, span := tracer.Start(context.TODO(), "processMessage")
+	defer span.End()
 	log.Printf("Received message: %s", string(msg.Value))
 
 	if len(msg.Value) == 0 {
@@ -88,6 +102,7 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 	var order model.Order
 	if err := json.Unmarshal(msg.Value, &order); err != nil {
 		log.Printf("Failed to unmarshal message: %v", err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil
 	}
 
@@ -100,11 +115,37 @@ func (c *Consumer) processMessage(msg *kafka.Message) error {
 
 	if err := c.service.ProcessOrder(&order); err != nil {
 		log.Printf("Failed to process order %s: %v", order.OrderUID, err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil
 	}
 
 	log.Printf("Successfully processed order: %s", order.OrderUID)
+	_ = ctx
 	return nil
+}
+
+func (c *Consumer) processWithRetry(msg *kafka.Message) error {
+	var err error
+	for attempt := 0; attempt < c.maxRetries; attempt++ {
+		if err = c.processMessage(msg); err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(200*(attempt+1)) * time.Millisecond)
+	}
+	if c.dlq != nil {
+		// Send to DLQ
+		if dlqErr := c.dlq.producer.Produce(&kafka.Message{
+			TopicPartition: kafka.TopicPartition{Topic: &c.dlq.topic, Partition: kafka.PartitionAny},
+			Value:          msg.Value,
+			Headers:        msg.Headers,
+		}, nil); dlqErr != nil {
+			log.Printf("Failed to write message to DLQ: %v", dlqErr)
+		} else {
+			c.dlq.producer.Flush(5000)
+			log.Printf("Message sent to DLQ topic %s", c.dlq.topic)
+		}
+	}
+	return err
 }
 
 type Producer struct {

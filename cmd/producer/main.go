@@ -8,6 +8,8 @@ import (
 	"myapp/internal/model"
 	"os"
 	"time"
+
+	"github.com/brianvoe/gofakeit/v7"
 )
 
 func main() {
@@ -17,52 +19,53 @@ func main() {
 
 	orderUID := os.Args[1]
 
+	gofakeit.Seed(time.Now().UnixNano())
 	order := &model.Order{
 		OrderUID:          orderUID,
-		TrackNumber:       "WBILMTESTTRACK",
+		TrackNumber:       gofakeit.Numerify("WB#########"),
 		Entry:             "WBIL",
 		Locale:            "en",
 		InternalSignature: "",
-		CustomerID:        "test",
-		DeliveryService:   "meest",
-		ShardKey:          "9",
-		SMID:              99,
+		CustomerID:        gofakeit.Username(),
+		DeliveryService:   gofakeit.Company(),
+		ShardKey:          fmt.Sprintf("%d", gofakeit.Number(1, 10)),
+		SMID:              gofakeit.Number(1, 1000),
 		DateCreated:       time.Now(),
-		OOFShard:          "1",
+		OOFShard:          fmt.Sprintf("%d", gofakeit.Number(1, 10)),
 		Delivery: model.Delivery{
-			Name:    "Test Testov",
-			Phone:   "+9720000000",
-			Zip:     "2639809",
-			City:    "Kiryat Mozkin",
-			Address: "Ploshad Mira 15",
-			Region:  "Kraiot",
-			Email:   "test@gmail.com",
+			Name:    gofakeit.Name(),
+			Phone:   gofakeit.Phone(),
+			Zip:     gofakeit.Zip(),
+			City:    gofakeit.City(),
+			Address: gofakeit.Street(),
+			Region:  gofakeit.StateAbr(),
+			Email:   gofakeit.Email(),
 		},
 		Payment: model.Payment{
 			Transaction:  orderUID,
 			RequestID:    "",
 			Currency:     "USD",
 			Provider:     "wbpay",
-			Amount:       1817,
-			PaymentDT:    1637907727,
-			Bank:         "alpha",
-			DeliveryCost: 1500,
-			GoodsTotal:   317,
-			CustomFee:    0,
+			Amount:       gofakeit.Number(100, 10000),
+			PaymentDT:    time.Now().Unix(),
+			Bank:         gofakeit.Company(),
+			DeliveryCost: gofakeit.Number(100, 2000),
+			GoodsTotal:   gofakeit.Number(100, 5000),
+			CustomFee:    gofakeit.Number(0, 100),
 		},
 		Items: []model.Item{
 			{
-				ChrtID:      9934930,
-				TrackNumber: "WBILMTESTTRACK",
-				Price:       453,
-				RID:         "ab4219087a764ae0btest",
-				Name:        "Mascaras",
-				Sale:        30,
-				Size:        "0",
-				TotalPrice:  317,
-				NMID:        2389212,
-				Brand:       "Vivienne Sabo",
-				Status:      202,
+				ChrtID:      gofakeit.Number(1000000, 9999999),
+				TrackNumber: gofakeit.Numerify("WB#########"),
+				Price:       gofakeit.Number(10, 1000),
+				RID:         gofakeit.UUID(),
+				Name:        gofakeit.ProductName(),
+				Sale:        gofakeit.Number(0, 80),
+				Size:        fmt.Sprintf("%d", gofakeit.Number(0, 54)),
+				TotalPrice:  gofakeit.Number(10, 3000),
+				NMID:        gofakeit.Number(100000, 999999),
+				Brand:       gofakeit.Company(),
+				Status:      gofakeit.Number(100, 300),
 			},
 		},
 	}

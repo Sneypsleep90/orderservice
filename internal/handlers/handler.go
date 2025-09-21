@@ -235,27 +235,3 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-
-type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message,omitempty"`
-	Code    int    `json:"code"`
-}
-
-func WriteError(w http.ResponseWriter, code int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-
-	response := ErrorResponse{
-		Error: http.StatusText(code),
-		Code:  code,
-	}
-
-	if message != "" {
-		response.Message = message
-	}
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("Error encoding error response: %v", err)
-	}
-}
