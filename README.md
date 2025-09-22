@@ -31,13 +31,12 @@
 ## 📦 Архитектура проекта (структура файлов)
 
 ```
-myapp/
+orderservice/
 ├─ .golangci.yml
 ├─ config.env
 ├─ docker-compose.yaml
 ├─ go.mod
 ├─ go.sum
-├─ main
 ├─ README.md
 ├─ cmd/
 │  ├─ main.go
